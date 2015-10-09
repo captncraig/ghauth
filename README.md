@@ -1,5 +1,8 @@
 # ghauth
 
+[![GoDoc](https://godoc.org/github.com/captncraig/ghauth?status.svg)](http://godoc.org/github.com/captncraig/ghauth)
+
+
 [Gin](https://github.com/gin-gonic/gin) middleware/handler for handling authentication to github via oauth.
 
 - Seamlessly manages oauth flow to github.

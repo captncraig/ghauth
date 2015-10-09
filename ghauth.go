@@ -15,10 +15,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	gh "github.com/google/go-github/github"
+	"github.com/google/go-github/github"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/github"
+	ogh "golang.org/x/oauth2/github"
 )
 
 const githubUserKey = "gh-user-token"
@@ -36,13 +36,13 @@ type GithubUser struct {
 	Token     string
 }
 
-func (g *GithubUser) Client() *gh.Client {
+func (g *GithubUser) Client() *github.Client {
 	return client(g.Token)
 }
 
-func client(token string) *gh.Client {
+func client(token string) *github.Client {
 	c := oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token}))
-	return gh.NewClient(c)
+	return github.NewClient(c)
 }
 
 type authManager struct {
@@ -72,7 +72,7 @@ func New(c *Conf) AuthManager {
 		rand.Read(hmac_key[:])
 	}
 	conf := &oauth2.Config{
-		Endpoint:     github.Endpoint,
+		Endpoint:     ogh.Endpoint,
 		ClientID:     c.ClientId,
 		ClientSecret: c.ClientSecret,
 		Scopes:       c.Scopes,
@@ -202,7 +202,7 @@ func (a *authManager) SetCookie(ctx *gin.Context, u *GithubUser) {
 	if cookieVal == "" {
 		return
 	}
-	http.SetCookie(ctx.Writer, &http.Cookie{Name: a.cookieName, Value: cookieVal, Path: "/", Expires: time.Now().Add(90 * 24 * time.Hour)})
+	http.SetCookie(ctx.Writer, &http.Cookie{Name: a.cookieName, Secure: true, HttpOnly: true, Value: cookieVal, Path: "/", Expires: time.Now().Add(90 * 24 * time.Hour)})
 }
 
 func (a *authManager) encrypt(plaintext []byte) string {
