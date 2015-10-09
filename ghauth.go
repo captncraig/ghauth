@@ -3,12 +3,9 @@ package ghauth
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -23,9 +20,15 @@ import (
 
 const githubUserKey = "gh-user-token"
 
+// AuthManager is the core interface of this package. It is able to provide
+// utility routes and authentication handlers.
 type AuthManager interface {
+	// Register necessary oauth routes at the specified paths.
 	RegisterRoutes(login, callback, logout string, r gin.IRouter)
+	// Middleware to use for routes that should identify the user, but not require login.
 	OpenHandler() gin.HandlerFunc
+	// Middleware that will require login to access the route. Will redirect to login and attempt to
+	// return to the same page on successful login.
 	LockedHandler() gin.HandlerFunc
 }
 
@@ -62,21 +65,16 @@ type Conf struct {
 }
 
 func New(c *Conf) AuthManager {
-	var aes_key, hmac_key [32]byte
-	if c.CookieSecret != "" {
-		hmac_key = sha256.Sum256([]byte(c.CookieSecret))
-		aes_key = sha256.Sum256([]byte(hmac_key[:]))
-	} else {
-		var aes_key, hmac_key [32]byte
-		rand.Read(aes_key[:])
-		rand.Read(hmac_key[:])
-	}
+	hmac_key := sha256.Sum256([]byte(c.CookieSecret))
+	aes_key := sha256.Sum256([]byte(hmac_key[:]))
+
 	conf := &oauth2.Config{
 		Endpoint:     ogh.Endpoint,
 		ClientID:     c.ClientId,
 		ClientSecret: c.ClientSecret,
 		Scopes:       c.Scopes,
 	}
+
 	aes, err := aes.NewCipher(aes_key[:])
 	if err != nil {
 		log.Fatal(err)
@@ -203,50 +201,4 @@ func (a *authManager) SetCookie(ctx *gin.Context, u *GithubUser) {
 		return
 	}
 	http.SetCookie(ctx.Writer, &http.Cookie{Name: a.cookieName, Secure: true, HttpOnly: true, Value: cookieVal, Path: "/", Expires: time.Now().Add(90 * 24 * time.Hour)})
-}
-
-func (a *authManager) encrypt(plaintext []byte) string {
-	//encrypt then sign
-	ciphertext := make([]byte, aes.BlockSize+len(plaintext))
-	iv := ciphertext[:aes.BlockSize]
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		return ""
-	}
-	stream := cipher.NewCFBEncrypter(a.aes, iv)
-	stream.XORKeyStream(ciphertext[aes.BlockSize:], plaintext)
-	hash := a.hash(ciphertext)
-	a.hash(ciphertext)
-	return base64.StdEncoding.EncodeToString(append(hash, ciphertext...))
-}
-func (a *authManager) hash(ciphertext []byte) []byte {
-	h := hmac.New(sha256.New, a.hmac_key)
-	_, err := h.Write(ciphertext)
-	if err != nil {
-		return []byte{}
-	}
-	m := h.Sum(nil)
-	return m
-}
-func (a *authManager) decrypt(cookieData string) string {
-	ciphertext, err := base64.StdEncoding.DecodeString(cookieData)
-	if err != nil {
-		return ""
-	}
-	if len(ciphertext) < sha256.Size+aes.BlockSize { //at least room for iv and hmac
-		return ""
-	}
-	//first validate hmac
-	msgMac := ciphertext[:sha256.Size]
-	ciphertext = ciphertext[sha256.Size:]
-	actualMac := a.hash(ciphertext)
-	if !hmac.Equal(msgMac, actualMac) {
-		return ""
-	}
-	// pull out iv and decrypt
-	iv := ciphertext[:aes.BlockSize]
-	ciphertext = ciphertext[aes.BlockSize:]
-
-	stream := cipher.NewCFBDecrypter(a.aes, iv)
-	stream.XORKeyStream(ciphertext, ciphertext)
-	return string(ciphertext)
 }
