@@ -25,11 +25,11 @@ const githubUserKey = "gh-user-token"
 type AuthManager interface {
 	// Register necessary oauth routes at the specified paths.
 	RegisterRoutes(login, callback, logout string, r gin.IRouter)
-	// Middleware to use for routes that should identify the user, but not require login.
-	OpenHandler() gin.HandlerFunc
+	// Middleware that checks cookie and sets user on context. Use on all routes.
+	AuthCheck() gin.HandlerFunc
 	// Middleware that will require login to access the route. Will redirect to login and attempt to
 	// return to the same page on successful login.
-	LockedHandler() gin.HandlerFunc
+	RequireAuth() gin.HandlerFunc
 }
 
 type GithubUser struct {
@@ -144,7 +144,7 @@ func (a *authManager) RegisterRoutes(login, callback, logout string, r gin.IRout
 	})
 }
 
-func (a *authManager) OpenHandler() gin.HandlerFunc {
+func (a *authManager) AuthCheck() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		u := a.userFromCookie(ctx)
 		ctx.Set(githubUserKey, u)
@@ -158,10 +158,9 @@ func User(ctx *gin.Context) *GithubUser {
 	return nil
 }
 
-func (a *authManager) LockedHandler() gin.HandlerFunc {
+func (a *authManager) RequireAuth() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		u := a.userFromCookie(ctx)
-		ctx.Set(githubUserKey, u)
+		u := User(ctx)
 		if u == nil {
 			ctx.Redirect(302, a.loginRoute+"?redirect="+url.QueryEscape(ctx.Request.URL.String()))
 			ctx.Abort()
