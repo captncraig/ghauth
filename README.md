@@ -28,6 +28,7 @@ func main() {
 
 	// register oauth routes
 	auth.RegisterRoutes("/login", "/oauth", "/logout", r)
+	// add the token reading middleware to all requests.
 	r.Use(auth.AuthCheck())
 	// all unauthorized routes can go here. Will still have user populated if logged in
 	r.GET("/", home)
