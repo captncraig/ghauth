@@ -28,13 +28,12 @@ func main() {
 
 	// register oauth routes
 	auth.RegisterRoutes("/login", "/oauth", "/logout", r)
-
+	r.Use(auth.AuthCheck())
 	// all unauthorized routes can go here. Will still have user populated if logged in
-	open := r.Group("/", auth.OpenHandler())
-	open.GET("/", home)
+	r.GET("/", home)
 
 	// require authorization for these routes. Will redirect to login if not logged-in
-	authRequired := r.Group("/", auth.LockedHandler())
+	authRequired := r.Group("/", auth.RequireAuth())
 	authRequired.GET("/repo/:owner/:repo", repo)
 
 	r.Run(":8080") // listen and serve on 0.0.0.0:8080
